@@ -1,0 +1,6 @@
+app = "ivaoth-bot"
+
+[build]
+
+[deploy]
+  min_machines_running = 1
