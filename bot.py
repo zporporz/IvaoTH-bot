@@ -42,6 +42,8 @@ async def inbound(ctx, icao):
     else:
         await ctx.send(f"✈️ Inbound {icao.upper()}:\n" + "\n".join(result[:15]))
 
+    await ctx.message.delete()    
+
 # ✈️ outbound
 @bot.command()
 async def outbound(ctx, icao):
@@ -64,6 +66,8 @@ async def outbound(ctx, icao):
     else:
         await ctx.send(f"🛫 Outbound {icao.upper()}:\n" + "\n".join(result[:15]))
 
+    await ctx.message.delete()    
+
 # ✈️ route
 @bot.command()
 async def route(ctx, dep, arr):
@@ -84,6 +88,8 @@ async def route(ctx, dep, arr):
     else:
         await ctx.send(f"✈️ {dep.upper()} → {arr.upper()}:\n" + "\n".join(result))
 
+    await ctx.message.delete()
+    
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
