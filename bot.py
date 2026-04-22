@@ -12,7 +12,7 @@ CHANNEL_ID = 1496389619523129494  # ใส่ channel id ของนาย
 
 async def send_ivao_data():
     await client.wait_until_ready()
-    channel = client.get_channel(CHANNEL_ID)
+    channel = await client.fetch_channel(CHANNEL_ID)
 
     while True:
         try:
@@ -27,7 +27,7 @@ async def send_ivao_data():
             await channel.send(f"VTBD inbound now: {count}")
 
         except Exception as e:
-            print(e)
+            print("ERROR:", e)
 
         await asyncio.sleep(60)
 
