@@ -132,9 +132,9 @@ async def route(ctx, dep, arr):
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
+async def setup_hook():
     if not auto_collect.is_running():
         auto_collect.start()
-
 
 # ---------------- START ----------------
 init_db()
