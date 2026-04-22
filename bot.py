@@ -81,8 +81,6 @@ async def on_ready():
 @bot.command()
 async def ping(ctx):
     await ctx.send("pong")    
+    
 
-@bot.event
-async def on_ready():
-    print(f"Logged in as {bot.user}")
 bot.run(TOKEN)
