@@ -8,6 +8,7 @@ from discord.ui import Modal, TextInput, View, Button
 
 from db import init_db
 from collector import process_data
+from datetime import datetime
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 IVAO_API_KEY = os.getenv("IVAO_API_KEY")
@@ -17,13 +18,21 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
-def search_flights(dep=None, arr=None, page=1, per_page=10):
+def search_flights(
+    dep=None,
+    arr=None,
+    from_dt=None,
+    to_dt=None,
+    page=1,
+    per_page=10,
+    bidirectional=False
+):
     conn = sqlite3.connect("/data/ivao.db")
     cur = conn.cursor()
 
     sql = """
     SELECT session_id, callsign, aircraft_id, departure, arrival,
-           landed_at, status, last_state
+           landed_at, status, last_state, connected_at
     FROM pilot_sessions
     WHERE 1=1
     """
@@ -36,21 +45,52 @@ def search_flights(dep=None, arr=None, page=1, per_page=10):
 
     params = []
 
-    if dep:
-        sql += " AND departure=?"
-        count_sql += " AND departure=?"
-        params.append(dep.upper())
+    if dep and arr and bidirectional:
+        sql += """
+        AND (
+            (departure=? AND arrival=?)
+            OR
+            (departure=? AND arrival=?)
+        )
+        """
 
-    if arr:
-        sql += " AND arrival=?"
-        count_sql += " AND arrival=?"
-        params.append(arr.upper())
+        count_sql += """
+        AND (
+            (departure=? AND arrival=?)
+            OR
+            (departure=? AND arrival=?)
+        )
+        """
+
+        params.extend([dep, arr, arr, dep])
+
+    else:
+        if dep:
+            sql += " AND departure=?"
+            count_sql += " AND departure=?"
+            params.append(dep)
+
+        if arr:
+            sql += " AND arrival=?"
+            count_sql += " AND arrival=?"
+            params.append(arr)
+
+    if from_dt:
+        sql += " AND connected_at >= ?"
+        count_sql += " AND connected_at >= ?"
+        params.append(from_dt)
+
+    if to_dt:
+        sql += " AND connected_at <= ?"
+        count_sql += " AND connected_at <= ?"
+        params.append(to_dt)
 
     total = cur.execute(count_sql, params).fetchone()[0]
 
     offset = (page - 1) * per_page
 
     sql += " ORDER BY connected_at DESC LIMIT ? OFFSET ?"
+
     rows = cur.execute(sql, params + [per_page, offset]).fetchall()
 
     conn.close()
@@ -79,19 +119,23 @@ def build_search_embed(rows, total, page, per_page):
         )
 
     embed.description = text[:4000]
-    embed.set_footer(text=f"Showing {start}-{end} of {total} | Page {page}")
+    embed.set_footer(
+        text=f"Showing {start}-{end} of {total} | Page {page} | UTC"
+    )
 
     return embed
 
 class SearchView(discord.ui.View):
-    def __init__(self, dep, arr, page=1):
+    def __init__(self, dep, arr, from_dt, to_dt, page=1):
         super().__init__(timeout=300)
 
         self.dep = dep
         self.arr = arr
+        self.from_dt = from_dt
+        self.to_dt = to_dt
         self.page = page
         self.per_page = 10
-
+        self.bidirectional = False
         self.update_buttons(1)
 
     def update_buttons(self, total):
@@ -107,7 +151,13 @@ class SearchView(discord.ui.View):
             self.page -= 1
 
         rows, total = search_flights(
-            self.dep, self.arr, self.page, self.per_page
+            self.dep,
+            self.arr,
+            self.from_dt,
+            self.to_dt,
+            self.page,
+            self.per_page,
+            self.bidirectional
         )
 
         self.update_buttons(total)
@@ -125,7 +175,13 @@ class SearchView(discord.ui.View):
     async def next(self, interaction: discord.Interaction, button: discord.ui.Button):
 
         rows, total = search_flights(
-            self.dep, self.arr, self.page, self.per_page
+            self.dep,
+            self.arr,
+            self.from_dt,
+            self.to_dt,
+            self.page,
+            self.per_page,
+            self.bidirectional
         )
 
         max_page = max(1, (total + self.per_page - 1) // self.per_page)
@@ -134,7 +190,56 @@ class SearchView(discord.ui.View):
             self.page += 1
 
         rows, total = search_flights(
-            self.dep, self.arr, self.page, self.per_page
+            self.dep,
+            self.arr,
+            self.from_dt,
+            self.to_dt,
+            self.page,
+            self.per_page,
+            self.bidirectional
+        )
+        self.update_buttons(total)
+
+        embed = build_search_embed(
+            rows, total, self.page, self.per_page
+        )
+
+        await interaction.response.edit_message(
+            embed=embed,
+            view=self
+        )
+
+    @discord.ui.button(
+    label="🔁 Bidirectional: OFF",
+    style=discord.ButtonStyle.green,
+    row=1
+    )
+    async def toggle_bi(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        if not self.dep or not self.arr:
+            await interaction.response.send_message(
+                "Bidirectional requires both Departure and Arrival ICAO.",
+                ephemeral=True
+            )
+            return
+
+        self.bidirectional = not self.bidirectional
+        self.page = 1
+
+        button.label = (
+            "🔁 Bidirectional: ON"
+            if self.bidirectional
+            else "🔁 Bidirectional: OFF"
+        )
+
+        rows, total = search_flights(
+            self.dep,
+            self.arr,
+            self.from_dt,
+            self.to_dt,
+            self.page,
+            self.per_page,
+            self.bidirectional
         )
 
         self.update_buttons(total)
@@ -163,36 +268,87 @@ def format_status(row):
 
 class SearchModal(Modal, title="Traffic Search"):
 
-    dep = TextInput(label="Departure ICAO", required=False, max_length=4)
-    arr = TextInput(label="Arrival ICAO", required=False, max_length=4)
+    dep = TextInput(
+        label="Departure ICAO",
+        required=False,
+        max_length=4
+    )
+
+    arr = TextInput(
+        label="Arrival ICAO",
+        required=False,
+        max_length=4
+    )
+
+    from_time = TextInput(
+        label="From UTC (YYYY-MM-DD HH:MM)",
+        required=False,
+        placeholder="2026-04-22 12:00"
+    )
+
+    to_time = TextInput(
+        label="To UTC (YYYY-MM-DD HH:MM)",
+        required=False,
+        placeholder="2026-04-22 18:00"
+    )
 
     async def on_submit(self, interaction: discord.Interaction):
 
         dep = self.dep.value.strip().upper()
         arr = self.arr.value.strip().upper()
+        from_dt = self.from_time.value.strip()
+        to_dt = self.to_time.value.strip()
 
-        # Validate English letters only
-        if dep and not dep.isalpha():
+        # ICAO Validate
+        if dep and (not dep.isalpha() or len(dep) != 4):
             await interaction.response.send_message(
-                "Please enter Departure ICAO in English letters only.",
+                "Departure ICAO must be 4 English letters.",
                 ephemeral=True
             )
             return
 
-        if arr and not arr.isalpha():
+        if arr and (not arr.isalpha() or len(arr) != 4):
             await interaction.response.send_message(
-                "Please enter Arrival ICAO in English letters only.",
+                "Arrival ICAO must be 4 English letters.",
                 ephemeral=True
             )
             return
 
-        # โหลดหน้าแรก
+        # Datetime Validate
+        try:
+            if from_dt:
+                datetime.strptime(from_dt, "%Y-%m-%d %H:%M")
+
+            if to_dt:
+                datetime.strptime(to_dt, "%Y-%m-%d %H:%M")
+
+        except:
+            await interaction.response.send_message(
+                "Date format must be YYYY-MM-DD HH:MM (UTC).",
+                ephemeral=True
+            )
+            return
+
+        # Check From < To
+        if from_dt and to_dt and from_dt > to_dt:
+            await interaction.response.send_message(
+                "'From UTC' must be earlier than 'To UTC'.",
+                ephemeral=True
+            )
+            return
+
         page = 1
         per_page = 10
 
-        rows, total = search_flights(dep, arr, page, per_page)
+        rows, total = search_flights(
+            dep,
+            arr,
+            from_dt,
+            to_dt,
+            page,
+            per_page
+        )
 
-        # ถ้าไม่เจอ
         if not rows:
             embed = discord.Embed(
                 title="✈️ Traffic Search Result",
@@ -203,9 +359,10 @@ class SearchModal(Modal, title="Traffic Search"):
             await interaction.response.send_message(embed=embed)
             return
 
-        # สร้าง embed + ปุ่มเปลี่ยนหน้า
         embed = build_search_embed(rows, total, page, per_page)
-        view = SearchView(dep, arr, page)
+
+        view = SearchView(dep, arr, from_dt, to_dt, page)
+        view.update_buttons(total)
 
         await interaction.response.send_message(
             embed=embed,
@@ -219,9 +376,6 @@ class SearchModal(Modal, title="Traffic Search"):
 )
 async def search_command(interaction: discord.Interaction):
     await interaction.response.send_modal(SearchModal())
-
-
-
 
 # ---------------- API ----------------
 def get_ivao_data():
