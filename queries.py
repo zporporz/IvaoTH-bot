@@ -1,6 +1,6 @@
 import sqlite3
 
-DB_NAME = "ivao.db"
+DB_NAME = "/data/ivao.db"
 
 
 def get_conn():
