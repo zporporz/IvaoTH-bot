@@ -3,6 +3,8 @@ import requests
 import asyncio
 import os
 
+print("TOKEN:", os.getenv("DISCORD_TOKEN"))
+
 TOKEN = os.getenv("DISCORD_TOKEN")
 
 intents = discord.Intents.default()
@@ -36,4 +38,9 @@ async def on_ready():
     print(f"Logged in as {client.user}")
     client.loop.create_task(send_ivao_data())
 
-client.run(TOKEN)
+print("STARTING BOT...")
+
+try:
+    client.run(TOKEN)
+except Exception as e:
+    print("LOGIN ERROR:", e)
