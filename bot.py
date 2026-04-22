@@ -1,7 +1,10 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import requests
 import os
+
+from db import init_db
+from collector import process_data
 
 TOKEN = os.getenv("DISCORD_TOKEN")
 IVAO_API_KEY = os.getenv("IVAO_API_KEY")
@@ -11,6 +14,8 @@ intents.message_content = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+
+# ---------------- API ----------------
 def get_ivao_data():
     url = "https://api.ivao.aero/v2/tracker/whazzup"
 
@@ -18,9 +23,40 @@ def get_ivao_data():
         "apiKey": IVAO_API_KEY
     }
 
-    return requests.get(url, headers=headers).json()
+    r = requests.get(url, headers=headers, timeout=10)
+    r.raise_for_status()
+    return r.json()
 
-# ✈️ inbound
+
+# ---------------- AUTO COLLECT ----------------
+@tasks.loop(seconds=15)
+async def auto_collect():
+    try:
+        data = get_ivao_data()
+        process_data(data)
+        print("Collector updated")
+
+    except Exception as e:
+        print("AUTO COLLECT ERROR:", e)
+
+
+# ---------------- HELPERS ----------------
+async def delete_command(ctx):
+    try:
+        await ctx.message.delete()
+    except discord.Forbidden:
+        pass
+    except discord.NotFound:
+        pass
+
+
+# ---------------- COMMANDS ----------------
+@bot.command()
+async def ping(ctx):
+    await ctx.send("pong")
+    await delete_command(ctx)
+
+
 @bot.command()
 async def inbound(ctx, icao):
     data = get_ivao_data()
@@ -33,18 +69,18 @@ async def inbound(ctx, icao):
         track = p.get("lastTrack") or {}
 
         if fp.get("arrivalId") == icao.upper():
-            status = track.get("state", "Unknown")
             dep = fp.get("departureId", "----")
-            result.append(f"{p['callsign']} from {dep} - {status}")
+            state = track.get("state", "Unknown")
+            result.append(f"{p['callsign']} from {dep} - {state}")
 
-    if not result:
-        await ctx.send(f"No inbound traffic to {icao.upper()}")
-    else:
+    if result:
         await ctx.send(f"✈️ Inbound {icao.upper()}:\n" + "\n".join(result[:15]))
+    else:
+        await ctx.send(f"No inbound traffic to {icao.upper()}")
 
-    await ctx.message.delete()    
+    await delete_command(ctx)
 
-# ✈️ outbound
+
 @bot.command()
 async def outbound(ctx, icao):
     data = get_ivao_data()
@@ -57,18 +93,18 @@ async def outbound(ctx, icao):
         track = p.get("lastTrack") or {}
 
         if fp.get("departureId") == icao.upper():
-            status = track.get("state", "Unknown")
             arr = fp.get("arrivalId", "----")
-            result.append(f"{p['callsign']} to {arr} - {status}")
+            state = track.get("state", "Unknown")
+            result.append(f"{p['callsign']} to {arr} - {state}")
 
-    if not result:
-        await ctx.send(f"No outbound traffic from {icao.upper()}")
-    else:
+    if result:
         await ctx.send(f"🛫 Outbound {icao.upper()}:\n" + "\n".join(result[:15]))
+    else:
+        await ctx.send(f"No outbound traffic from {icao.upper()}")
 
-    await ctx.message.delete()    
+    await delete_command(ctx)
 
-# ✈️ route
+
 @bot.command()
 async def route(ctx, dep, arr):
     data = get_ivao_data()
@@ -81,22 +117,25 @@ async def route(ctx, dep, arr):
         track = p.get("lastTrack") or {}
 
         if fp.get("departureId") == dep.upper() and fp.get("arrivalId") == arr.upper():
-            result.append(f"{p['callsign']} - {track.get('state','Unknown')}")
+            result.append(f"{p['callsign']} - {track.get('state', 'Unknown')}")
 
-    if not result:
-        await ctx.send(f"No flights from {dep.upper()} to {arr.upper()}")
-    else:
+    if result:
         await ctx.send(f"✈️ {dep.upper()} → {arr.upper()}:\n" + "\n".join(result))
+    else:
+        await ctx.send(f"No flights from {dep.upper()} to {arr.upper()}")
 
-    await ctx.message.delete()
-    
+    await delete_command(ctx)
+
+
+# ---------------- READY ----------------
 @bot.event
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
-@bot.command()
-async def ping(ctx):
-    await ctx.send("pong")    
+    if not auto_collect.is_running():
+        auto_collect.start()
 
 
+# ---------------- START ----------------
+init_db()
 bot.run(TOKEN)
