@@ -4,13 +4,19 @@ import requests
 import os
 
 TOKEN = os.getenv("DISCORD_TOKEN")
+IVAO_API_KEY = os.getenv("IVAO_API_KEY")
 
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 def get_ivao_data():
     url = "https://api.ivao.aero/v2/tracker/whazzup"
-    return requests.get(url).json()
+
+    headers = {
+        "apiKey": IVAO_API_KEY
+    }
+
+    return requests.get(url, headers=headers).json()
 
 # ✈️ inbound
 @bot.command()
