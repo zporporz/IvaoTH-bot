@@ -107,10 +107,26 @@ def build_search_embed(rows, total, page, per_page):
 
     text = ""
 
+    landed = 0
+    active = 0
+    missing = 0
+
     for row in rows:
         sid, callsign, acft, dep, arr = row[:5]
+
+        landed_at = row[5]
+        status_db = row[6]
+
         status = format_status(row)
         link = f"https://tracker.ivao.aero/sessions/{sid}"
+
+        # Count status
+        if landed_at:
+            landed += 1
+        elif status_db == "offline":
+            missing += 1
+        else:
+            active += 1
 
         text += (
             f"**{callsign}** {acft}\n"
@@ -119,8 +135,13 @@ def build_search_embed(rows, total, page, per_page):
         )
 
     embed.description = text[:4000]
+
     embed.set_footer(
-        text=f"Showing {start}-{end} of {total} | Page {page} | UTC"
+        text=(
+            f"Showing {start}-{end} of {total} | "
+            f"🟢{landed} 🟡{active} 🔴{missing} | "
+            f"Page {page} | UTC"
+        )
     )
 
     return embed
