@@ -7,6 +7,8 @@ TOKEN = os.getenv("DISCORD_TOKEN")
 IVAO_API_KEY = os.getenv("IVAO_API_KEY")
 
 intents = discord.Intents.default()
+intents.message_content = True
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 def get_ivao_data():
@@ -76,4 +78,11 @@ async def route(ctx, dep, arr):
 async def on_ready():
     print(f"Logged in as {bot.user}")
 
+@bot.command()
+async def ping(ctx):
+    await ctx.send("pong")    
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
 bot.run(TOKEN)
