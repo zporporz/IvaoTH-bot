@@ -29,8 +29,8 @@ async def inbound(ctx, icao):
     result = []
 
     for p in pilots:
-        fp = p.get("flightPlan", {})
-        track = p.get("lastTrack", {})
+        fp = p.get("flightPlan") or {}
+        track = p.get("lastTrack") or {}
 
         if fp.get("arrivalId") == icao.upper():
             status = track.get("state", "Unknown")
@@ -51,8 +51,8 @@ async def outbound(ctx, icao):
     result = []
 
     for p in pilots:
-        fp = p.get("flightPlan", {})
-        track = p.get("lastTrack", {})
+        fp = p.get("flightPlan") or {}
+        track = p.get("lastTrack") or {}
 
         if fp.get("departureId") == icao.upper():
             status = track.get("state", "Unknown")
@@ -73,8 +73,8 @@ async def route(ctx, dep, arr):
     result = []
 
     for p in pilots:
-        fp = p.get("flightPlan", {})
-        track = p.get("lastTrack", {})
+        fp = p.get("flightPlan") or {}
+        track = p.get("lastTrack") or {}
 
         if fp.get("departureId") == dep.upper() and fp.get("arrivalId") == arr.upper():
             result.append(f"{p['callsign']} - {track.get('state','Unknown')}")
