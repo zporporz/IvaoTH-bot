@@ -337,6 +337,13 @@ class SearchModal(Modal, title="Traffic Search"):
             )
             return
 
+        # Convert user time to DB format
+        if from_dt:
+            from_dt = from_dt.replace(" ", "T") + ":00Z"
+
+        if to_dt:
+            to_dt = to_dt.replace(" ", "T") + ":59Z"
+
         page = 1
         per_page = 10
 
