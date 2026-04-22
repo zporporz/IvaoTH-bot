@@ -326,10 +326,13 @@ async def route(ctx, dep, arr):
 # ---------------- READY ----------------
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print(f"Logged in as {bot.user}", flush=True)
 
-    await bot.tree.sync()
-    print("Slash commands synced", flush=True)
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} slash commands", flush=True)
+    except Exception as e:
+        print("Slash sync error:", e, flush=True)
 
     if not auto_collect.is_running():
         auto_collect.start()
