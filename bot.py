@@ -27,19 +27,6 @@ def get_ivao_data():
     r.raise_for_status()
     return r.json()
 
-
-# ---------------- AUTO COLLECT ----------------
-@tasks.loop(seconds=15)
-async def auto_collect():
-    try:
-        data = get_ivao_data()
-        process_data(data)
-        print("Collector updated")
-
-    except Exception as e:
-        print("AUTO COLLECT ERROR:", e)
-
-
 # ---------------- HELPERS ----------------
 async def delete_command(ctx):
     try:
@@ -130,11 +117,23 @@ async def route(ctx, dep, arr):
 # ---------------- READY ----------------
 @bot.event
 async def on_ready():
-    print(f"Logged in as {bot.user}")
+    print(f"Logged in as {bot.user}", flush=True)
 
     if not auto_collect.is_running():
         auto_collect.start()
-        print("Collector loop started")
+        print("Collector loop started", flush=True)
+
+
+# ---------------- AUTO COLLECT ----------------
+@tasks.loop(seconds=15)
+async def auto_collect():
+    try:
+        data = get_ivao_data()
+        process_data(data)
+        print("Collector updated", flush=True)
+
+    except Exception as e:
+        print("AUTO COLLECT ERROR:", e, flush=True)
 
 # ---------------- START ----------------
 init_db()
