@@ -176,6 +176,7 @@ class SearchView(discord.ui.View):
         self.page = page
         self.per_page = 10
         self.bidirectional = False
+        self.message = None
         self.update_buttons(1)
 
     def update_buttons(self, total):
@@ -183,6 +184,26 @@ class SearchView(discord.ui.View):
 
         self.prev.disabled = self.page <= 1
         self.next.disabled = self.page >= max_page
+
+
+    async def on_timeout(self):
+        for item in self.children:
+            item.disabled = True
+
+        try:
+            if self.message:
+                embed = self.message.embeds[0]
+
+                embed.set_footer(
+                    text=f"Page {self.page} • ⌛ Expired • Use /search again"
+                )
+
+                await self.message.edit(
+                    embed=embed,
+                    view=self
+                )
+        except Exception:
+            pass
 
     @discord.ui.button(label="⬅ Prev", style=discord.ButtonStyle.gray)
     async def prev(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -501,6 +522,8 @@ class SearchModal(Modal, title="Traffic Search"):
             embed=embed,
             view=view
         )
+
+        view.message = await interaction.original_response()
 
 
 @bot.tree.command(
