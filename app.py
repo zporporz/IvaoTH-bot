@@ -96,23 +96,28 @@ def dashboard():
     conn = sqlite3.connect(DB_PATH, timeout=30)
     cur = conn.cursor()
 
-    # pilots online
+    # Thailand pilots online now
     cur.execute("""
         SELECT COUNT(*)
         FROM pilot_sessions
         WHERE status='online'
+        AND (
+            departure LIKE 'VT%'
+            OR arrival LIKE 'VT%'
+        )
     """)
     pilots_online = cur.fetchone()[0]
 
-    # atc online
+    # Thailand ATC online now
     cur.execute("""
         SELECT COUNT(*)
         FROM atc_sessions
         WHERE status='online'
+        AND callsign LIKE 'VT%'
     """)
     atc_online = cur.fetchone()[0]
 
-    # observers online
+    # Thailand observers online now
     cur.execute("""
         SELECT COUNT(*)
         FROM observer_sessions
@@ -120,15 +125,20 @@ def dashboard():
     """)
     observers_online = cur.fetchone()[0]
 
-    # landed flights
+    # Thailand landed flights last 7 days
     cur.execute("""
         SELECT COUNT(*)
         FROM pilot_sessions
         WHERE landed_at IS NOT NULL
+        AND connected_at >= datetime('now','-7 day')
+        AND (
+            departure LIKE 'VT%'
+            OR arrival LIKE 'VT%'
+        )
     """)
     landed = cur.fetchone()[0]
 
-    # missing flights
+    # Thailand missing flights last 7 days
     cur.execute("""
         SELECT COUNT(*)
         FROM pilot_sessions
@@ -142,11 +152,12 @@ def dashboard():
     """)
     missing = cur.fetchone()[0]
 
-    # top departures
+    # Top departures Thailand last 7 days
     cur.execute("""
         SELECT departure, COUNT(*)
         FROM pilot_sessions
         WHERE departure LIKE 'VT%'
+        AND connected_at >= datetime('now','-7 day')
         GROUP BY departure
         ORDER BY COUNT(*) DESC
         LIMIT 5
@@ -159,11 +170,12 @@ def dashboard():
             "count": row[1]
         })
 
-    # top arrivals
+    # Top arrivals Thailand last 7 days
     cur.execute("""
         SELECT arrival, COUNT(*)
         FROM pilot_sessions
         WHERE arrival LIKE 'VT%'
+        AND connected_at >= datetime('now','-7 day')
         GROUP BY arrival
         ORDER BY COUNT(*) DESC
         LIMIT 5
