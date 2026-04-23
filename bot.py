@@ -5,7 +5,8 @@ import os
 import sqlite3
 from discord import app_commands
 from discord.ui import Modal, TextInput, View, Button
-
+import io
+from openpyxl import Workbook
 from db import init_db
 from collector import process_data
 from datetime import datetime
@@ -231,9 +232,9 @@ class SearchView(discord.ui.View):
         )
 
     @discord.ui.button(
-    label="🔁 Bidirectional: OFF",
-    style=discord.ButtonStyle.green,
-    row=1
+        label="🔁 Bidirectional: OFF",
+        style=discord.ButtonStyle.green,
+        row=1
     )
     async def toggle_bi(self, interaction: discord.Interaction, button: discord.ui.Button):
 
@@ -272,6 +273,89 @@ class SearchView(discord.ui.View):
         await interaction.response.edit_message(
             embed=embed,
             view=self
+        )
+        
+    @discord.ui.button(
+        label="📊 Export Excel",
+        style=discord.ButtonStyle.green,
+        row=1
+    )
+    async def export_excel(self, interaction: discord.Interaction, button: discord.ui.Button):
+
+        rows, total = search_flights(
+            self.dep,
+            self.arr,
+            self.from_dt,
+            self.to_dt,
+            1,
+            1000,
+            self.bidirectional
+        )
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Traffic Search"
+
+        ws.append([
+            "Tracker ID",
+            "Callsign",
+            "Aircraft",
+            "Departure",
+            "Arrival",
+            "Connected At",
+            "Landed At",
+            "Status"
+        ])
+
+        for row in rows:
+            sid = row[0]
+            callsign = row[1]
+            acft = row[2]
+            dep = row[3]
+            arr = row[4]
+            landed_at = row[5]
+            status_db = row[6]
+            connected_at = row[8]
+
+            if landed_at:
+                status = "Landed"
+            elif status_db == "offline":
+                status = "Missing"
+            else:
+                status = "Active"
+
+            ws.append([
+                sid,
+                callsign,
+                acft,
+                dep,
+                arr,
+                connected_at,
+                landed_at,
+                status
+            ])
+        for col in ws.columns:
+            max_len = 0
+            letter = col[0].column_letter
+
+            for cell in col:
+                try:
+                    max_len = max(max_len, len(str(cell.value)))
+                except:
+                    pass
+
+            ws.column_dimensions[letter].width = max_len + 2
+
+        file_stream = io.BytesIO()
+        wb.save(file_stream)
+        file_stream.seek(0)
+
+        await interaction.response.send_message(
+            file=discord.File(
+                file_stream,
+                filename=f"traffic_search_{datetime.utcnow():%Y%m%d_%H%Mz}.xlsx"
+            ),
+            ephemeral=True
         )
 
 def format_status(row):
@@ -343,7 +427,7 @@ class SearchModal(Modal, title="Traffic Search"):
             if to_dt:
                 datetime.strptime(to_dt, "%Y-%m-%d %H:%M")
 
-        except:
+        except ValueError:
             await interaction.response.send_message(
                 "Date format must be YYYY-MM-DD HH:MM (UTC).",
                 ephemeral=True
