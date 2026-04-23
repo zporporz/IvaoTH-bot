@@ -7,6 +7,13 @@ CORS(app)
 
 DB_PATH = "/data/ivao.db"
 
+@app.route("/")
+def home():
+    return jsonify({
+        "status": "online",
+        "service": "IVAO TH Search API"
+    })
+
 @app.route("/api/search")
 def search():
 
@@ -15,12 +22,12 @@ def search():
     from_time = request.args.get("from", "").strip()
     to_time = request.args.get("to", "").strip()
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     cur = conn.cursor()
 
     sql = """
-        SELECT callsign, user_id, aircraft_id,
-               departure, arrival, connected_at
+        SELECT session_id, callsign, user_id, aircraft_id,
+                departure, arrival, connected_at
         FROM pilot_sessions
         WHERE 1=1
     """
@@ -46,7 +53,7 @@ def search():
         sql += " AND connected_at <= ?"
         params.append(to_time)
 
-    sql += " ORDER BY connected_at DESC LIMIT 100"
+    sql += " ORDER BY connected_at DESC LIMIT 300"
 
     cur.execute(sql, params)
 
@@ -57,12 +64,13 @@ def search():
 
     for row in rows:
         result.append({
-            "callsign": row[0],
-            "vid": row[1],
-            "aircraft": row[2],
-            "dep": row[3],
-            "arr": row[4],
-            "time": row[5]
+            "track_id": row[0],
+            "callsign": row[1],
+            "vid": row[2],
+            "aircraft": row[3],
+            "dep": row[4],
+            "arr": row[5],
+            "time": row[6]
         })
 
     return jsonify(result)
