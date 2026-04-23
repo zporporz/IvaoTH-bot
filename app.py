@@ -27,7 +27,7 @@ def search():
 
     sql = """
         SELECT session_id, callsign, user_id, aircraft_id,
-                departure, arrival, connected_at
+                departure, arrival, connected_at, status
         FROM pilot_sessions
         WHERE 1=1
     """
@@ -70,7 +70,8 @@ def search():
             "aircraft": row[3],
             "dep": row[4],
             "arr": row[5],
-            "time": row[6]
+            "time": row[6],
+            "status": row[7]           
         })
 
     return jsonify(result)
