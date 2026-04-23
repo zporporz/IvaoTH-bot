@@ -2,3 +2,4 @@ discord.py
 requests
 openpyxl
 flask
+flask-cors
