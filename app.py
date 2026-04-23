@@ -90,6 +90,80 @@ def search():
 
     return jsonify(result)
 
+@app.route("/api/dashboard")
+def dashboard():
+
+    conn = sqlite3.connect(DB_PATH, timeout=30)
+    cur = conn.cursor()
+
+    # pilots online
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM pilot_sessions
+        WHERE status='online'
+    """)
+    pilots_online = cur.fetchone()[0]
+
+    # atc online
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM atc_sessions
+        WHERE status='online'
+    """)
+    atc_online = cur.fetchone()[0]
+
+    # observers online
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM observer_sessions
+        WHERE status='online'
+    """)
+    observers_online = cur.fetchone()[0]
+
+    # landed flights
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM pilot_sessions
+        WHERE landed_at IS NOT NULL
+    """)
+    landed = cur.fetchone()[0]
+
+    # missing flights
+    cur.execute("""
+        SELECT COUNT(*)
+        FROM pilot_sessions
+        WHERE status='offline'
+        AND landed_at IS NULL
+    """)
+    missing = cur.fetchone()[0]
+
+    # top departures
+    cur.execute("""
+        SELECT departure, COUNT(*)
+        FROM pilot_sessions
+        WHERE departure IS NOT NULL
+        GROUP BY departure
+        ORDER BY COUNT(*) DESC
+        LIMIT 5
+    """)
+
+    top_departures = []
+    for row in cur.fetchall():
+        top_departures.append({
+            "icao": row[0],
+            "count": row[1]
+        })
+
+    conn.close()
+
+    return jsonify({
+        "pilots_online": pilots_online,
+        "atc_online": atc_online,
+        "observers_online": observers_online,
+        "landed": landed,
+        "missing": missing,
+        "top_departures": top_departures
+    })
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8080)
