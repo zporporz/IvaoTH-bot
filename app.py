@@ -134,6 +134,11 @@ def dashboard():
         FROM pilot_sessions
         WHERE status='offline'
         AND landed_at IS NULL
+        AND connected_at >= datetime('now','-7 day')
+        AND (
+            departure LIKE 'VT%'
+            OR arrival LIKE 'VT%'
+        )
     """)
     missing = cur.fetchone()[0]
 
@@ -141,7 +146,7 @@ def dashboard():
     cur.execute("""
         SELECT departure, COUNT(*)
         FROM pilot_sessions
-        WHERE departure IS NOT NULL
+        WHERE departure LIKE 'VT%'
         GROUP BY departure
         ORDER BY COUNT(*) DESC
         LIMIT 5
@@ -154,6 +159,23 @@ def dashboard():
             "count": row[1]
         })
 
+    # top arrivals
+    cur.execute("""
+        SELECT arrival, COUNT(*)
+        FROM pilot_sessions
+        WHERE arrival LIKE 'VT%'
+        GROUP BY arrival
+        ORDER BY COUNT(*) DESC
+        LIMIT 5
+    """)
+
+    top_arrivals = []
+    for row in cur.fetchall():
+        top_arrivals.append({
+            "icao": row[0],
+            "count": row[1]
+        })
+
     conn.close()
 
     return jsonify({
@@ -162,7 +184,8 @@ def dashboard():
         "observers_online": observers_online,
         "landed": landed,
         "missing": missing,
-        "top_departures": top_departures
+        "top_departures": top_departures,
+        "top_arrivals": top_arrivals
     })
 
 if __name__ == "__main__":
