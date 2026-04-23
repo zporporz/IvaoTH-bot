@@ -99,7 +99,7 @@ def search_flights(
 
     offset = (page - 1) * per_page
 
-    sql += " ORDER BY connected_at DESC LIMIT ? OFFSET ?"
+    sql += " ORDER BY connected_at ASC LIMIT ? OFFSET ?"
 
     rows = cur.execute(sql, params + [per_page, offset]).fetchall()
 
@@ -144,12 +144,13 @@ def build_search_embed(rows, total, page, per_page):
 
         link = f"https://tracker.ivao.aero/sessions/{sid}"
 
-        connect_time = connected[11:16] + "z" if connected else "--:--"
+        dt = datetime.strptime(connected, "%Y-%m-%dT%H:%M:%S.000Z")
+        connect_time = dt.strftime("%d %b %H:%Mz")
 
         text += (
             f"**{callsign}** ({vid}) {acft}\n"
-            f"{dep} → {arr}\n"
-            f"🕒 {connect_time} | {status} | [Track #{sid}]({link})\n\n"
+            f"🛫 {dep} → 🛬 {arr}\n"
+            f"🔌 {connect_time} • {status} • [#{sid}]({link})\n\n"
         )
 
     embed.description = text[:4000]
