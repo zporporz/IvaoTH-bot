@@ -32,9 +32,18 @@ def search_flights(
     cur = conn.cursor()
 
     sql = """
-    SELECT session_id, callsign, aircraft_id, departure, arrival,
-           landed_at, status, last_state, connected_at
-    FROM pilot_sessions
+    SELECT
+        session_id,
+        user_id,
+        callsign,
+        aircraft_id,
+        departure,
+        arrival,
+        landed_at,
+        status,
+        last_state,
+        connected_at
+        FROM pilot_sessions
     WHERE 1=1
     """
 
@@ -113,15 +122,17 @@ def build_search_embed(rows, total, page, per_page):
     missing = 0
 
     for row in rows:
-        sid, callsign, acft, dep, arr = row[:5]
+        sid = row[0]
+        vid = row[1]
+        callsign = row[2]
+        acft = row[3]
+        dep = row[4]
+        arr = row[5]
+        connected = row[9]
 
-        landed_at = row[5]
-        status_db = row[6]
+        landed_at = row[6]
+        status_db = row[7]
 
-        status = format_status(row)
-        link = f"https://tracker.ivao.aero/sessions/{sid}"
-
-        # Count status
         if landed_at:
             landed += 1
         elif status_db == "offline":
@@ -129,10 +140,16 @@ def build_search_embed(rows, total, page, per_page):
         else:
             active += 1
 
+        status = format_status(row)
+
+        link = f"https://tracker.ivao.aero/sessions/{sid}"
+
+        connect_time = connected[11:16] + "z" if connected else "--:--"
+
         text += (
-            f"**{callsign}** {acft}\n"
+            f"**{callsign}** ({vid}) {acft}\n"
             f"{dep} → {arr}\n"
-            f"{status} | [Track #{sid}]({link})\n\n"
+            f"🕒 {connect_time} | {status} | [Track #{sid}]({link})\n\n"
         )
 
     embed.description = text[:4000]
@@ -274,7 +291,7 @@ class SearchView(discord.ui.View):
             embed=embed,
             view=self
         )
-        
+
     @discord.ui.button(
         label="📊 Export Excel",
         style=discord.ButtonStyle.green,
@@ -298,6 +315,7 @@ class SearchView(discord.ui.View):
 
         ws.append([
             "Tracker ID",
+            "VID",
             "Callsign",
             "Aircraft",
             "Departure",
@@ -309,13 +327,14 @@ class SearchView(discord.ui.View):
 
         for row in rows:
             sid = row[0]
-            callsign = row[1]
-            acft = row[2]
-            dep = row[3]
-            arr = row[4]
-            landed_at = row[5]
-            status_db = row[6]
-            connected_at = row[8]
+            vid = row[1]
+            callsign = row[2]
+            acft = row[3]
+            dep = row[4]
+            arr = row[5]
+            landed_at = row[6]
+            status_db = row[7]
+            connected_at = row[9]
 
             if landed_at:
                 status = "Landed"
@@ -326,6 +345,7 @@ class SearchView(discord.ui.View):
 
             ws.append([
                 sid,
+                vid,
                 callsign,
                 acft,
                 dep,
@@ -341,7 +361,7 @@ class SearchView(discord.ui.View):
             for cell in col:
                 try:
                     max_len = max(max_len, len(str(cell.value)))
-                except:
+                except Exception:
                     pass
 
             ws.column_dimensions[letter].width = max_len + 2
@@ -359,9 +379,9 @@ class SearchView(discord.ui.View):
         )
 
 def format_status(row):
-    landed_at = row[5]
-    status = row[6]
-    last_state = row[7]
+    landed_at = row[6]
+    status = row[7]
+    last_state = row[8]
 
     if landed_at:
         return "🟢 Landed"
