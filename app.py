@@ -9,24 +9,52 @@ DB_PATH = "/data/ivao.db"
 
 @app.route("/api/search")
 def search():
-    dep = request.args.get("dep", "").upper()
-    arr = request.args.get("arr", "").upper()
+
+    dep = request.args.get("dep", "").upper().strip()
+    arr = request.args.get("arr", "").upper().strip()
+    from_time = request.args.get("from", "").strip()
+    to_time = request.args.get("to", "").strip()
 
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
-    cur.execute("""
-        SELECT callsign, user_id, aircraft_id, departure, arrival, connected_at
+    sql = """
+        SELECT callsign, user_id, aircraft_id,
+               departure, arrival, connected_at
         FROM pilot_sessions
-        WHERE departure=? AND arrival=?
-        ORDER BY connected_at DESC
-        LIMIT 50
-    """, (dep, arr))
+        WHERE 1=1
+    """
+
+    params = []
+
+    # dep filter
+    if dep:
+        sql += " AND departure=?"
+        params.append(dep)
+
+    # arr filter
+    if arr:
+        sql += " AND arrival=?"
+        params.append(arr)
+
+    # time filter
+    if from_time:
+        sql += " AND connected_at >= ?"
+        params.append(from_time)
+
+    if to_time:
+        sql += " AND connected_at <= ?"
+        params.append(to_time)
+
+    sql += " ORDER BY connected_at DESC LIMIT 100"
+
+    cur.execute(sql, params)
 
     rows = cur.fetchall()
     conn.close()
 
     result = []
+
     for row in rows:
         result.append({
             "callsign": row[0],
